@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 1998-2016 ALPS Collaboration. See COPYRIGHT.TXT
+ * Copyright (C) 1998-2018 ALPS Collaboration. See COPYRIGHT.TXT
  * All rights reserved. Use is subject to license terms. See LICENSE.TXT
  * For use in publications, see ACKNOWLEDGE.TXT
  */
@@ -12,7 +12,6 @@
 #define ALPS_TESTS_MPI_GUARD_HPP_d1f0c4691e714f40be03d55dcfdffcd3
 
 #include <string>
-#include <iostream>
 #include <mpi.h>
 
 extern int get_number_of_bcasts();

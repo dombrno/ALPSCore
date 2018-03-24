@@ -1,13 +1,15 @@
 include(ALPSEnableTests)
 
 set (test_src
+    hdf5_open
+    hdf5_open_deprecated
     hdf5_complex
     hdf5_bool
     hdf5_copy
     hdf5_exceptions
-    hdf5_family
     hdf5_memory
     hdf5_misc
+    hdf5_native_type    
     hdf5_multiarchive
     hdf5_pair
     hdf5_real_complex
@@ -15,9 +17,16 @@ set (test_src
     hdf5_replace
     hdf5_vecvecdbl
     hdf5_vecveccplx
+    hdf5_boost_optional
     hdf5_io_types
+    hdf5_attributes
     hdf5_omp #this one was commented out. Any idea why?
+    hdf5_tensor
     )
+
+if (ExtensiveTesting)
+   set(test_src  ${test_src} hdf5_large_array)
+endif()
 
 foreach(test ${test_src})
     alps_add_gtest(${test})

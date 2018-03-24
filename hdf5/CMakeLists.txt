@@ -1,8 +1,8 @@
-# 
+#
 # alps-hdf5 cmake configuration script.
-# 
+#
 
-cmake_minimum_required (VERSION 2.8.12)
+cmake_minimum_required (VERSION 3.1)
 
 # define project name
 project (alps-hdf5 CXX)
@@ -14,6 +14,7 @@ list(APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/../common/cmake)
 # add common definitions, if being configured independently
 if (CMAKE_SOURCE_DIR STREQUAL PROJECT_SOURCE_DIR)
   include(ALPSCommonModuleDefinitions)
+  include(ALPSEnableMPI)
 endif()
 
 
@@ -22,11 +23,16 @@ if (DocumentationOnly)
   return()
 endif()
 
-add_this_package(archive)
+add_this_package(archive
+                 archivecontext
+                 archive_free
+                 archive_write
+                 archive_read
+                 archive_read_scalar_helpers
+                 archive_read_vector_data_helper
+                 archive_read_vector_attribute_helper)
 
-include(ALPSEnableMPI)
-
-add_boost(filesystem system program_options)
+add_boost()
 add_hdf5()
 
 add_alps_package(alps-utilities)

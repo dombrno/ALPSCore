@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 1998-2016 ALPS Collaboration. See COPYRIGHT.TXT
+ * Copyright (C) 1998-2018 ALPS Collaboration. See COPYRIGHT.TXT
  * All rights reserved. Use is subject to license terms. See LICENSE.TXT
  * For use in publications, see ACKNOWLEDGE.TXT
  */
@@ -9,8 +9,6 @@
 #include <alps/config.hpp>
 #include <alps/params.hpp>
 #include <alps/accumulators.hpp>
-
-#include <boost/filesystem/path.hpp>
 
 #include <string>
 
@@ -52,8 +50,8 @@ namespace alps {
         return s.fraction_completed();
     }
 
-    void save_results(alps::accumulators::accumulator_set const & observables, params const & params, boost::filesystem::path const & filename, std::string const & path);
-    void save_results(alps::accumulators::result_set const & results, params const & params, boost::filesystem::path const & filename, std::string const & path);
+    void save_results(alps::accumulators::accumulator_set const & observables, params const & params, std::string const & filename, std::string const & path);
+    void save_results(alps::accumulators::result_set const & results, params const & params, std::string const & filename, std::string const & path);
 
     template<typename C, typename P> void broadcast(C const & c, P & p, int r = 0) {
         p.broadcast(c, r);

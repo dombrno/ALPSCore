@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 1998-2016 ALPS Collaboration. See COPYRIGHT.TXT
+ * Copyright (C) 1998-2018 ALPS Collaboration. See COPYRIGHT.TXT
  * All rights reserved. Use is subject to license terms. See LICENSE.TXT
  * For use in publications, see ACKNOWLEDGE.TXT
  */
@@ -7,11 +7,11 @@
 #include <string>
 #include <cstring>
 
-#include <boost/filesystem.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/foreach.hpp>
 
-#include "alps/utilities/gtest_par_xml_output.hpp"
+#include <alps/utilities/gtest_par_xml_output.hpp>
+#include <alps/utilities/fs/get_extension.hpp>
 
 namespace alps {
 
@@ -35,7 +35,7 @@ namespace alps {
                 if (arg[arg.size()-1]=='/') {
                     arg_new=arg.substr(0,arg.size()-1)+srank+"/";
                 } else {
-                    std::string ext=boost::filesystem::path(arg.substr(1,arg.size()-1)).extension().string();
+                    std::string ext=alps::fs::get_extension(arg.substr(1,arg.size()-1));
                     arg_new=arg.substr(0,arg.size()-ext.size())
                             +srank+ext;
                 }

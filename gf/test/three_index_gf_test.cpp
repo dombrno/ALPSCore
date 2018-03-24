@@ -1,15 +1,14 @@
 /*
- * Copyright (C) 1998-2016 ALPS Collaboration. See COPYRIGHT.TXT
+ * Copyright (C) 1998-2018 ALPS Collaboration. See COPYRIGHT.TXT
  * All rights reserved. Use is subject to license terms. See LICENSE.TXT
  * For use in publications, see ACKNOWLEDGE.TXT
  */
 
 #include "gtest/gtest.h"
-#include "alps/gf/gf.hpp"
-#include "alps/gf/tail.hpp"
+#include <alps/gf/gf.hpp>
 #include "gf_test.hpp"
 
-class ThreeIndexTestGF : public ::testing::Test
+class ThreeIndexGFTest : public ::testing::Test
 {
   public:
     const double beta;
@@ -20,14 +19,14 @@ class ThreeIndexTestGF : public ::testing::Test
     gf_type gf;
     gf_type gf2;
 
-    ThreeIndexTestGF():beta(10), nsites(4), nfreq(10), nspins(2),
+    ThreeIndexGFTest():beta(10), nsites(4), nfreq(10), nspins(2),
              gf(alps::gf::matsubara_positive_mesh(beta,nfreq),
                 alps::gf::momentum_index_mesh(get_data_for_momentum_mesh()),
                 alps::gf::index_mesh(nspins)),
              gf2(gf) {}
 };
 
-TEST_F(ThreeIndexTestGF,access)
+TEST_F(ThreeIndexGFTest,access)
 {
     alps::gf::matsubara_index omega; omega=4;
     alps::gf::momentum_index i; i=2;
@@ -39,7 +38,7 @@ TEST_F(ThreeIndexTestGF,access)
     EXPECT_EQ(4, x.imag());
 }
 
-TEST_F(ThreeIndexTestGF,init)
+TEST_F(ThreeIndexGFTest,init)
 {
     alps::gf::matsubara_index omega; omega=4;
     alps::gf::momentum_index i; i=2;
@@ -51,31 +50,53 @@ TEST_F(ThreeIndexTestGF,init)
     EXPECT_EQ(0, x.imag());
 }
 
-TEST_F(ThreeIndexTestGF,saveload)
+TEST_F(ThreeIndexGFTest,saveload)
 {
     namespace g=alps::gf;
     {
-        alps::hdf5::archive oar("gf.h5","w");
+        alps::hdf5::archive oar("gf_3i_saveload.h5","w");
         gf(g::matsubara_index(4),g::momentum_index(3), g::index(1))=std::complex<double>(7., 3.);
         gf.save(oar,"/gf");
     }
     {
-        alps::hdf5::archive iar("gf.h5");
+        alps::hdf5::archive iar("gf_3i_saveload.h5");
         gf2.load(iar,"/gf");
     }
     EXPECT_EQ(7, gf2(g::matsubara_index(4),g::momentum_index(3), g::index(1)).real());
     EXPECT_EQ(3, gf2(g::matsubara_index(4),g::momentum_index(3), g::index(1)).imag());
     {
-        alps::hdf5::archive oar("gf.h5","rw");
+        alps::hdf5::archive oar("gf_3i_saveload.h5","rw");
         oar["/gf/version/major"]<<7;
         EXPECT_THROW(gf2.load(oar,"/gf"),std::runtime_error);
     }
     EXPECT_EQ(7, gf2(g::matsubara_index(4),g::momentum_index(3), g::index(1)).real());
     EXPECT_EQ(3, gf2(g::matsubara_index(4),g::momentum_index(3), g::index(1)).imag());
-
 }
 
-TEST_F(ThreeIndexTestGF, tail)
+TEST_F(ThreeIndexGFTest,saveloadstream)
+{
+    namespace g=alps::gf;
+    {
+        alps::hdf5::archive oar("gf_3i_saveloadstr.h5","w");
+        gf(g::matsubara_index(4),g::momentum_index(3), g::index(1))=std::complex<double>(7., 3.);
+        oar["/gf"] << gf;
+    }
+    {
+        alps::hdf5::archive iar("gf_3i_saveloadstr.h5");
+        iar["/gf"] >> gf2;
+    }
+    EXPECT_EQ(7, gf2(g::matsubara_index(4),g::momentum_index(3), g::index(1)).real());
+    EXPECT_EQ(3, gf2(g::matsubara_index(4),g::momentum_index(3), g::index(1)).imag());
+    {
+        alps::hdf5::archive oar("gf_3i_saveloadstr.h5","rw");
+        oar["/gf/version/major"]<<7;
+        EXPECT_THROW(oar["/gf"]>>gf2, std::runtime_error);
+    }
+    EXPECT_EQ(7, gf2(g::matsubara_index(4),g::momentum_index(3), g::index(1)).real());
+    EXPECT_EQ(3, gf2(g::matsubara_index(4),g::momentum_index(3), g::index(1)).imag());
+}
+
+TEST_F(ThreeIndexGFTest, tail)
 {
     namespace g=alps::gf;
     typedef g::two_index_gf<double, g::momentum_index_mesh, g::index_mesh> density_matrix_type;
@@ -118,7 +139,7 @@ TEST_F(ThreeIndexTestGF, tail)
     */
 }
 
-TEST_F(ThreeIndexTestGF, TailSaveLoad)
+TEST_F(ThreeIndexGFTest, TailSaveLoad)
 {
     namespace g=alps::gf;
     typedef g::two_index_gf<double, g::momentum_index_mesh, g::index_mesh> density_matrix_type;
@@ -148,14 +169,13 @@ TEST_F(ThreeIndexTestGF, TailSaveLoad)
     EXPECT_EQ(0,gft.max_tail_order());
     EXPECT_EQ(0,(denmat-gft.tail(0)).norm());
     {
-        alps::hdf5::archive oar("gft.h5","w");
+        alps::hdf5::archive oar("gf_3i_tail.h5","w");
         gft(g::matsubara_index(4),g::momentum_index(3), g::index(1))=std::complex<double>(7., 3.);
-        gft.save(oar,"/gft");
+        oar["/gft"] << gft;
     }
     {
-        alps::hdf5::archive iar("gft.h5");
-        
-        gft2.load(iar,"/gft");
+        alps::hdf5::archive iar("gf_3i_tail.h5");
+        iar["/gft"] >> gft2;
     }
     EXPECT_EQ(gft2.tail().size(), gft.tail().size()) << "Tail size mismatch";
     EXPECT_NEAR(0, (gft.tail(0)-gft2.tail(0)).norm(), 1E-8)<<"Tail loaded differs from tail stored"; 
@@ -165,7 +185,7 @@ TEST_F(ThreeIndexTestGF, TailSaveLoad)
     
 }
 
-TEST_F(ThreeIndexTestGF,EqOperators)
+TEST_F(ThreeIndexGFTest,EqOperators)
 {
     namespace g=alps::gf;
 
@@ -206,7 +226,7 @@ TEST_F(ThreeIndexTestGF,EqOperators)
     }
 }
 
-TEST_F(ThreeIndexTestGF,Assign)
+TEST_F(ThreeIndexGFTest,Assign)
 {
     namespace g=alps::gf;
 
@@ -232,18 +252,18 @@ TEST_F(ThreeIndexTestGF,Assign)
     gf2=gf;
     EXPECT_EQ(data, gf2(omega,i,sigma));
     
-    EXPECT_THROW(other_gf_beta=gf, std::invalid_argument);
-    // EXPECT_EQ(data, other_gf_beta(omega,i,sigma));
+    EXPECT_NO_THROW(other_gf_beta=gf);
+    EXPECT_EQ(data, other_gf_beta(omega,i,sigma));
     
-    EXPECT_THROW(other_gf_nfreq=gf, std::invalid_argument);
-    // EXPECT_EQ(data, other_gf_nfreq(omega,i,sigma));
+    EXPECT_NO_THROW(other_gf_nfreq=gf);
+    EXPECT_EQ(data, other_gf_nfreq(omega,i,sigma));
 
-    EXPECT_THROW(other_gf_nspins=gf, std::invalid_argument);
-    // EXPECT_EQ(data, other_gf_nspins(omega,i,sigma));
+    EXPECT_NO_THROW(other_gf_nspins=gf);
+    EXPECT_EQ(data, other_gf_nspins(omega,i,sigma));
 }
 
 
-TEST_F(ThreeIndexTestGF,Operators)
+TEST_F(ThreeIndexGFTest,Operators)
 {
     namespace g=alps::gf;
 
@@ -284,7 +304,7 @@ TEST_F(ThreeIndexTestGF,Operators)
     }
 }
 
-TEST_F(ThreeIndexTestGF,scaling)
+TEST_F(ThreeIndexGFTest,scaling)
 {
     alps::gf::momentum_index i; i=2;
     alps::gf::index sigma(1);
@@ -302,7 +322,21 @@ TEST_F(ThreeIndexTestGF,scaling)
     EXPECT_NEAR(4, x1.imag(),1.e-10);
 }
 
-TEST_F(ThreeIndexTestGF,print)
+TEST_F(ThreeIndexGFTest,negation)
+{
+    alps::gf::momentum_index i; i=2;
+    alps::gf::index sigma(1);
+    alps::gf::matsubara_index omega; omega=4;
+
+    gf(omega,i,sigma)=std::complex<double>(3,4);
+    gf_type gf_neg=-gf;
+
+    std::complex<double> x=gf_neg(omega,i,sigma);
+    EXPECT_NEAR(-3, x.real(),1.e-10);
+    EXPECT_NEAR(-4, x.imag(),1.e-10);
+}
+
+TEST_F(ThreeIndexGFTest,print)
 {
   std::stringstream gf_stream;
   gf_stream<<gf;
@@ -317,6 +351,72 @@ TEST_F(ThreeIndexTestGF,print)
   EXPECT_EQ(gf_stream_by_hand.str(), gf_stream.str());
 }
 
+// FIXME: does not test the validity of print output
+TEST_F(ThreeIndexGFTest, tailPrint)
+{
+    namespace g=alps::gf;
+    typedef g::two_index_gf<double, g::momentum_index_mesh, g::index_mesh> density_matrix_type;
+    density_matrix_type denmat=density_matrix_type(g::momentum_index_mesh(get_data_for_momentum_mesh()),
+                                      g::index_mesh(nspins));
 
+    // prepare diagonal matrix
+    double U=3.0;
+    denmat.initialize();
+    for (g::momentum_index i=g::momentum_index(0); i<denmat.mesh1().extent(); ++i) {
+        denmat(i,g::index(0))=0.5*U;
+        denmat(i,g::index(1))=0.5*U;
+    }
 
+    // Attach a tail to the GF
+    int order=0;
+    
+    // FIXME: TODO: gf.set_tail(min_order, max_order, denmat, ...);
+    g::omega_k_sigma_gf_with_tail gft(gf);
+    gft.set_tail(order, denmat)
+    // .set_tail(order+1, other_gf) ....
+        ;
 
+    std::ostringstream outs;
+    outs << gft.tail(0);
+    std::cout << "Output is:\n" << outs.str() << std::endl;
+}
+
+TEST_F(ThreeIndexGFTest, DefaultConstructive)
+{
+    gf_type gf_empty;
+    EXPECT_TRUE(gf_empty.is_empty());
+    {
+        alps::hdf5::archive oar("gf_3i_defconstr.h5","w");
+        oar["/gf"] << gf;
+    }
+    {
+        alps::hdf5::archive iar("gf_3i_defconstr.h5");
+        iar["/gf"] >> gf_empty;
+    }
+    EXPECT_FALSE(gf_empty.is_empty());
+}
+
+TEST_F(ThreeIndexGFTest, DefaultConstructiveAssign)
+{
+    gf_type gf_empty;
+    gf_type gf_empty2;
+    gf_type gf_empty3 = gf;
+    EXPECT_TRUE(gf_empty.is_empty());
+    EXPECT_TRUE(gf_empty2.is_empty());
+    EXPECT_FALSE(gf_empty3.is_empty());
+    EXPECT_FALSE(gf_empty3.data().size()==0);
+    EXPECT_NO_THROW(gf_empty = gf_empty2);
+    EXPECT_NO_THROW(gf_empty3 = gf_empty);
+    EXPECT_TRUE(gf_empty.is_empty());
+    EXPECT_TRUE(gf_empty3.is_empty());
+    EXPECT_TRUE(gf_empty3.data().size()==0);
+}
+
+#ifndef NDEBUG
+TEST_F(ThreeIndexGFTest, DefaultConstructiveAccess) {
+    gf_type gf_empty;
+    EXPECT_ANY_THROW(gf_empty.norm());
+    EXPECT_ANY_THROW(gf_empty*1.0);
+    EXPECT_ANY_THROW(-gf_empty);
+}
+#endif

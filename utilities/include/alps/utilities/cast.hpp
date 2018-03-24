@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 1998-2016 ALPS Collaboration. See COPYRIGHT.TXT
+ * Copyright (C) 1998-2018 ALPS Collaboration. See COPYRIGHT.TXT
  * All rights reserved. Use is subject to license terms. See LICENSE.TXT
  * For use in publications, see ACKNOWLEDGE.TXT
  */
@@ -11,12 +11,11 @@
 #include <alps/utilities/stacktrace.hpp>
 
 #include <boost/bind.hpp>
-#include <boost/mpl/int.hpp>
-#include <boost/filesystem/path.hpp>
 
 #include <string>
 #include <complex>
 #include <typeinfo>
+#include <type_traits>
 #include <algorithm>
 #include <stdexcept>
 #include <cstdio>
@@ -30,7 +29,7 @@ namespace alps {
     template<typename U, typename T> inline U cast(T const &);
 
     namespace detail {
-    
+
         template<typename U, typename T> struct is_cast {
             static T t;
             static char check(U);
@@ -40,18 +39,18 @@ namespace alps {
 
         template<
             typename U, typename T, typename X
-        > inline U cast_generic(T arg, X) {
+        > inline U cast_generic(T /*arg*/, X) {
             throw bad_cast(
-                  std::string("cannot cast from ") 
-                + typeid(T).name() 
-                + " to " 
+                  std::string("cannot cast from ")
+                + typeid(T).name()
+                + " to "
                 + typeid(U).name() + ALPS_STACKTRACE
             );
             return U();
         }
 
         template<typename U, typename T> inline U cast_generic(
-            T arg, boost::mpl::int_<1> const&
+            T arg, std::integral_constant<int, 1> const&
         ) {
             return arg;
         }
@@ -61,7 +60,7 @@ namespace alps {
     template<typename U, typename T> struct cast_hook {
         static inline U apply(T arg) {
             return detail::cast_generic<U, T>(
-                arg, boost::mpl::int_<detail::is_cast<U, T>::value>()
+                arg, std::integral_constant<int, detail::is_cast<U, T>::value>()
             );
         }
     };
@@ -146,18 +145,6 @@ namespace alps {
     template<typename T> struct cast_hook<std::complex<T>, std::string> {
         static inline std::complex<T> apply(std::string const & arg) {
             return cast<T>(arg);
-        }
-    };
-    
-    template<typename T> struct cast_hook<boost::filesystem::path, T> {
-        static inline boost::filesystem::path apply(T const & arg) {
-            return boost::filesystem::path(cast<std::string>(arg));
-        }
-    };
-
-    template<typename T> struct cast_hook<boost::filesystem::path, std::complex<T> > {
-        static inline boost::filesystem::path apply(std::complex<T> const & arg) {
-            return boost::filesystem::path(cast<std::string>(arg));
         }
     };
 

@@ -1,13 +1,11 @@
 /*
- * Copyright (C) 1998-2016 ALPS Collaboration. See COPYRIGHT.TXT
+ * Copyright (C) 1998-2018 ALPS Collaboration. See COPYRIGHT.TXT
  * All rights reserved. Use is subject to license terms. See LICENSE.TXT
  * For use in publications, see ACKNOWLEDGE.TXT
  */
 
 #include <alps/utilities/signal.hpp>
-#include <alps/utilities/remove_extensions.hpp>
 #include <alps/mc/mcbase.hpp>
-// #include "boost/filesystem/path.hpp"
 
 namespace alps {
 
@@ -22,12 +20,12 @@ namespace alps {
         return parameters.define<long>("SEED", 42, "PRNG seed");
     }
 
-    void mcbase::save(boost::filesystem::path const & filename) const {
+  void mcbase::save(std::string const & filename) const {
         alps::hdf5::archive ar(filename, "w");
         ar["/simulation/realizations/0/clones/0"] << *this;
     }
 
-    void mcbase::load(boost::filesystem::path const & filename) {
+    void mcbase::load(std::string const & filename) {
         alps::hdf5::archive ar(filename);
         ar["/simulation/realizations/0/clones/0"] >> *this;
     }

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 1998-2016 ALPS Collaboration. See COPYRIGHT.TXT
+ * Copyright (C) 1998-2018 ALPS Collaboration. See COPYRIGHT.TXT
  * All rights reserved. Use is subject to license terms. See LICENSE.TXT
  * For use in publications, see ACKNOWLEDGE.TXT
  */
@@ -77,7 +77,7 @@ int main(int argc, char** argv)
             
             // Saving to the output file
             std::string output_file = parameters["outputfile"];
-            alps::hdf5::archive ar(boost::filesystem::path(output_file), "w");
+            alps::hdf5::archive ar(output_file, "w");
             ar["/parameters"] << parameters;
             ar["/simulation/results"] << results;
         }

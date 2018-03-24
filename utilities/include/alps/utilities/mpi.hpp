@@ -1,13 +1,13 @@
 /*
- * Copyright (C) 1998-2016 ALPS Collaboration. See COPYRIGHT.TXT
+ * Copyright (C) 1998-2018 ALPS Collaboration. See COPYRIGHT.TXT
  * All rights reserved. Use is subject to license terms. See LICENSE.TXT
  * For use in publications, see ACKNOWLEDGE.TXT
  */
 
-/** @file mpi.hpp
-    
+/** @file utilities/mpi.hpp
+
     @brief Header for object-oriented interface to MPI (similar to boost::mpi)
-    
+
     @details
     The interface provided by this file is intended to be (almost)
     drop-in replacemnt for the subset of boost::mpi functionality used
@@ -22,13 +22,13 @@
 #include <vector>
 #include <complex>
 #include <exception> /* for std::uncaught_exception() */
+#include <functional> /* for std::plus */
+#include <algorithm> /* for std::max */
 
 #include <boost/scoped_array.hpp> /* for std::string broadcast */
 #include <boost/shared_ptr.hpp> /* for proper copy/assign of managed communicators */
 
-// DEBUG:
 #include <stdexcept>
-// DEBUG:
 #include <typeinfo>
 
 
@@ -43,6 +43,7 @@ namespace alps {
         template <>                                             \
         class mpi_type<_cxxtype_> {                             \
           public:                                               \
+            typedef _cxxtype_ value_type;                       \
             operator MPI_Datatype() { return _mpitype_; }       \
         }
 
@@ -77,13 +78,13 @@ namespace alps {
         // ALPS_MPI_DETAIL_MAKETYPE(MPI_C_LONG_DOUBLE_COMPLEX,long double _Complex);
 #ifdef ALPS_MPI_HAS_MPI_CXX_BOOL
        ALPS_MPI_DETAIL_MAKETYPE(MPI_CXX_BOOL,bool);
-#endif        
-          
+#endif
+
 #if defined(ALPS_MPI_HAS_MPI_CXX_DOUBLE_COMPLEX) && defined(ALPS_MPI_HAS_MPI_CXX_FLOAT_COMPLEX)
         ALPS_MPI_DETAIL_MAKETYPE(MPI_CXX_DOUBLE_COMPLEX,std::complex<double>);
         ALPS_MPI_DETAIL_MAKETYPE(MPI_CXX_FLOAT_COMPLEX,std::complex<float>);
-#endif        
-          
+#endif
+
 #undef ALPS_MPI_DETAIL_MAKETYPE
         } // detail::
 
@@ -114,7 +115,7 @@ namespace alps {
             communicator() : comm_ptr_(new MPI_Comm(MPI_COMM_WORLD)) {} // FIXME? Shall we deprecate it?
 
             // FIXME: introduce error checking!!
-            
+
             communicator(const MPI_Comm& comm, comm_create_kind kind) {
                 switch (kind) {
                   default:
@@ -163,7 +164,7 @@ namespace alps {
             bool initialized_;
             bool abort_on_exception_;
             public:
-            
+
             static void abort(int rc=0)
             {
                 MPI_Abort(MPI_COMM_WORLD,rc);
@@ -182,12 +183,20 @@ namespace alps {
                 MPI_Finalized(&fin);
                 return fin;
             }
-            
+
             environment(int& argc, char**& argv, bool abort_on_exception=true)
                 : initialized_(false), abort_on_exception_(abort_on_exception)
             {
                 if (!initialized()) {
                     MPI_Init(&argc, &argv);
+                    initialized_=true;
+                }
+            }
+            environment(bool abort_on_exception=true)
+                : initialized_(false), abort_on_exception_(abort_on_exception)
+            {
+                if (!initialized()) {
+                    MPI_Init(NULL,NULL);
                     initialized_=true;
                 }
             }
@@ -201,17 +210,21 @@ namespace alps {
                 }
                 MPI_Finalize();
             }
-                
+
         };
 
-        /// Class-holder for reduction operations for type T
+        /// Class-holder for reduction operations (and a functor) for type T.
         template <typename T>
         class maximum {
             public:
             maximum() { }
+            T operator()(const T& a, const T& b) const {
+                using std::max;
+                return max(a,b);
+            }
         };
 
-        
+
         /// Broadcasts array `vals` of a primitive type `T`, length `count` on communicator `comm` with root `root`
         template <typename T>
         void broadcast(const communicator& comm, T* vals, std::size_t count, int root) {
@@ -232,7 +245,7 @@ namespace alps {
         template <typename T>
         inline void broadcast(const communicator& comm, std::complex<T>* vals, std::size_t count, int root) {
             // sizeof() returns size in chars (FIXME? should it be bytes?)
-            MPI_Bcast(vals, count*sizeof(std::complex<T>), MPI_CHAR, root, comm); 
+            MPI_Bcast(vals, count*sizeof(std::complex<T>), MPI_CHAR, root, comm);
         }
 #endif
 
@@ -260,25 +273,21 @@ namespace alps {
             }
         }
 
-        
+
         /// Returns MPI datatype for the value of type `T`
         template <typename T>
-        MPI_Datatype get_mpi_datatype(const T& val) {
+        MPI_Datatype get_mpi_datatype(const T&) {
             return detail::mpi_type<T>();
-            // throw std::logic_error(std::string("get_mpi_datatype() is not implemented, called for type T=")
-            //                        +typeid(T).name());
         }
 
         /// performs MPI_Allgather() for primitive type T
-        /** @NOTE Vector `out_vals` is resized */
+        /** @note Vector `out_vals` is resized */
         template <typename T>
         void all_gather(const communicator& comm, const T& in_val, std::vector<T>& out_vals) {
             out_vals.resize(comm.size());
             MPI_Allgather((void*)&in_val, 1, detail::mpi_type<T>(),
                           &out_vals.front(), 1, detail::mpi_type<T>(),
                           comm);
-            // throw std::logic_error(std::string("all_gather() is not implemented, called for type T=")
-            //                        +typeid(T).name());
         }
 
         /// Trait for MPI reduction operations
@@ -301,7 +310,7 @@ namespace alps {
                 return MPI_SUM;
             }
         };
-        
+
         /// Trait for MPI reduction operations: specialization for maximum
         // FIXME: remove T? restrict T?
         template <typename T>
@@ -311,9 +320,42 @@ namespace alps {
                 return MPI_MAX;
             }
         };
-        
-        
+
+        /// Performs MPI_Allreduce for array of a primitive type, T[n]
+        template <typename T, typename OP>
+        void all_reduce(const alps::mpi::communicator& comm, const T* val, int n,
+                        T* out_val, const OP& /*op*/)
+        {
+            if (n<=0) {
+                throw std::invalid_argument("Non-positive array size in mpi::all_reduce()");
+            }
+            // @todo FIXME: implement in-place operations
+            if (val==out_val) {
+                throw std::invalid_argument("Implicit in-place mpi::all_reduce() is not implemented");
+            }
+            MPI_Allreduce(const_cast<T*>(val), out_val, n, detail::mpi_type<T>(),
+                          is_mpi_op<OP,T>::op(), comm);
+        }
+
+        /// Performs MPI_Allreduce for a primitive type T
+        template <typename T, typename OP>
+        void all_reduce(const alps::mpi::communicator& comm, const T& val,
+                        T& out_val, const OP& op)
+        {
+            all_reduce(comm, &val, 1, &out_val, op);
+        }
+
+        /// Performs MPI_Allreduce for a primitive type T
+        template <typename T, typename OP>
+        T all_reduce(const alps::mpi::communicator& comm, const T& val, const OP& op)
+        {
+            T out_val;
+            all_reduce(comm, val, out_val, op);
+            return out_val;
+        }
+
     } // mpi::
 } // alps::
+
 
 #endif /* ALPS_UTILITIES_MPI_HPP_INCLUDED_90206380262d48f0bcbe98fd16edd65d */

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 1998-2016 ALPS Collaboration. See COPYRIGHT.TXT
+ * Copyright (C) 1998-2018 ALPS Collaboration. See COPYRIGHT.TXT
  * All rights reserved. Use is subject to license terms. See LICENSE.TXT
  * For use in publications, see ACKNOWLEDGE.TXT
  */
@@ -35,7 +35,6 @@ class MpiBcastTest_base : public ::testing::Test {
 
     void bcast_scalar() {
         value_type root_data=alps::testing::datapoint<value_type>::get(true);
-        value_type root_data0=root_data;
         value_type slave_data=alps::testing::datapoint<value_type>::get(false);
         value_type& my_data=*(this->is_root_? &root_data : &slave_data);
 

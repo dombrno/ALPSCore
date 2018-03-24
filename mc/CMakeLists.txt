@@ -2,7 +2,7 @@
 # alps-mc cmake configuration script.
 # 
 
-cmake_minimum_required (VERSION 2.8.12)
+cmake_minimum_required (VERSION 3.1)
 
 # define project name
 project (alps-mc CXX)
@@ -13,6 +13,7 @@ list(APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/../common/cmake)
 # add common definitions, if being configured independently
 if (CMAKE_SOURCE_DIR STREQUAL PROJECT_SOURCE_DIR)
   include(ALPSCommonModuleDefinitions)
+  include(ALPSEnableMPI)
 endif()
 
 
@@ -23,13 +24,7 @@ endif ()
 
 add_this_package(mcbase api stop_callback)
 
-include(ALPSEnableMPI)
-
-set(boost_libs_ chrono program_options filesystem system serialization)
-# if(ENABLE_MPI)
-#   list(APPEND boost_libs_ mpi)
-# endif(ENABLE_MPI)
-add_boost(${boost_libs_})
+add_boost()
 
 add_hdf5()
 add_alps_package(alps-utilities alps-hdf5 alps-params alps-accumulators)

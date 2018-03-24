@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 1998-2016 ALPS Collaboration. See COPYRIGHT.TXT
+ * Copyright (C) 1998-2018 ALPS Collaboration. See COPYRIGHT.TXT
  * All rights reserved. Use is subject to license terms. See LICENSE.TXT
  * For use in publications, see ACKNOWLEDGE.TXT
  */
@@ -34,8 +34,6 @@ namespace alps {
                 sigaction(SIGQUIT, &action, NULL);
                 sigaction(SIGUSR1, &action, NULL);
                 sigaction(SIGUSR2, &action, NULL);
-                sigaction(SIGSTOP, &action, NULL);
-                sigaction(SIGKILL, &action, NULL);
             }
         #endif
         listen();

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 1998-2016 ALPS Collaboration. See COPYRIGHT.TXT
+ * Copyright (C) 1998-2018 ALPS Collaboration. See COPYRIGHT.TXT
  * All rights reserved. Use is subject to license terms. See LICENSE.TXT
  * For use in publications, see ACKNOWLEDGE.TXT
  */
@@ -20,9 +20,9 @@ void save(
       alps::hdf5::archive & ar
     , std::string const & path
     , E const & value
-    , std::vector<std::size_t> size = std::vector<std::size_t>()
-    , std::vector<std::size_t> chunk = std::vector<std::size_t>()
-    , std::vector<std::size_t> offset = std::vector<std::size_t>()
+    , std::vector<std::size_t> /*size*/ = std::vector<std::size_t>()
+    , std::vector<std::size_t> /*chunk*/ = std::vector<std::size_t>()
+    , std::vector<std::size_t> /*offset*/ = std::vector<std::size_t>()
 )
 {
     if( value == E1 )     ar << alps::make_pvp(path, "E1");
@@ -32,8 +32,8 @@ void load(
       alps::hdf5::archive & ar
     , std::string const & path
     , E & value
-    , std::vector<std::size_t> chunk = std::vector<std::size_t>()
-    , std::vector<std::size_t> offset = std::vector<std::size_t>()
+    , std::vector<std::size_t> /*chunk*/ = std::vector<std::size_t>()
+    , std::vector<std::size_t> /*offset*/ = std::vector<std::size_t>()
 )
 {
     std::string s;
@@ -69,13 +69,13 @@ TEST(hdf5, TestingIoOfBoolVars){
     a.b.b = true; a.b.p = std::make_pair(3,4); a.b.e = E1;
     a.c.b = false; a.c.u = 1;
     {
-        hdf5::archive ar("test_hdf5_bool.h5",1);
+        hdf5::archive ar("test_hdf5_bool.h5","w");
         ar << make_pvp("/true",true);
         ar << make_pvp("/false",false);
         ar << make_pvp("/a",a);
     }
     {
-        hdf5::archive ar("test_hdf5_bool.h5", 0);
+        hdf5::archive ar("test_hdf5_bool.h5", "r");
         bool bb, bc, bt, bf;
         ar 
             >> make_pvp("/a/b/b",bb) 
