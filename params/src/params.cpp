@@ -16,15 +16,16 @@
 #include <cstring> // for memcmp()
 #include <boost/optional.hpp>
 
+#include <alps/utilities/fs/get_basename.hpp>
+
 #include <alps/testing/fp_compare.hpp>
 
-#include <alps/testing/unique_file.hpp> // FIXME!!! Temporary!
-#include <fstream> // FIXME!!! Temporary!
+#include <alps/utilities/temporary_filename.hpp> // FIXME!!! Temporary!
+#include <fstream>
 
 #include <alps/hdf5/map.hpp>
 #include <alps/hdf5/vector.hpp>
 
-#include <boost/foreach.hpp>
 
 #ifdef ALPS_HAVE_MPI
 #include <alps/utilities/mpi_map.hpp>
@@ -54,13 +55,80 @@ namespace alps {
                     return boost::none;
                 }
             };
+
+
+            // Helper function to read INI file into the provided map
+            template <typename MAP_T>
+            void ini_file_to_map(const std::string& ini_name, MAP_T& map)
+            {
+                detail::iniparser parser(ini_name);
+                for(const detail::iniparser::kv_pair& kv: parser()) {
+                    // FIXME!!! Check for duplicates and optionally warn!
+                    std::string key=kv.first;
+                    if (!key.empty() && key[0]=='.') key.erase(0,1);
+                    map[key]=kv.second;
+                }
+            }
+
+            // Helper functor to convert a string to a value of the
+            // same type as a dict_value and assign it to the dict_value
+            class parse_visitor {
+                const std::string& strparam_val_;
+                dictionary::value_type& dictval_;
+              public:
+                typedef bool result_type;
+
+                parse_visitor(const std::string& strparam_val, dictionary::value_type& dval):
+                    strparam_val_(strparam_val), dictval_(dval)
+                {}
+
+                template <typename BOUND_T>
+                result_type operator()(const BOUND_T& bound_val) const
+                {
+                    boost::optional<BOUND_T> maybe_val=detail::parse_string<BOUND_T>::apply(strparam_val_);
+                    if (!maybe_val) return false;
+                    dictval_=*maybe_val;
+                    return true;
+                }
+
+                result_type operator()(const dictionary::value_type::None&) const
+                {
+                    return true;
+                }
+            };
+
+
+            /// Default help description
+            static const char Default_help_description[]="Print help message";
         }
+
+        params::params(const std::string& inifile)
+            : dictionary(), raw_kv_content_(), td_map_(), err_status_(), origins_(), help_header_()
+        {
+            read_ini_file_(inifile);
+            if (!defined("help")) define("help", Default_help_description);
+        }
+
+
+
+        params::params(int argc, const char* const* argv, const char* hdf5_path)
+            : dictionary(),
+              raw_kv_content_(),
+              td_map_(),
+              err_status_(),
+              origins_(),
+              help_header_()
+        {
+            initialize_(argc, argv, hdf5_path);
+            if (!defined("help")) define("help", Default_help_description);
+        }
+
 
         int params::get_ini_name_count() const
         {
             return origins_.data().size()-origins_type::INIFILES;
         }
-        
+
         std::string params::get_ini_name(int n) const
         {
             if (n<0 || n>=get_ini_name_count()) return std::string();
@@ -80,15 +148,15 @@ namespace alps {
 
         params& params::description(const std::string &message)
         {
-            this->define("help", "Print help message");
             help_header_=message;
+            if (!defined("help")) define("help", Default_help_description);
             return *this;
         }
 
         bool params::has_unused_(std::ostream& out, const std::string* prefix_ptr) const
         {
             strvec unused;
-            BOOST_FOREACH(const strmap::value_type& kv, raw_kv_content_) {
+            for(const strmap::value_type& kv: raw_kv_content_) {
                 bool relevant = !prefix_ptr  // no specific prefix?
                                 || (prefix_ptr->empty() ? kv.first.find('.')==std::string::npos // top-level section?
                                                         : kv.first.find(*prefix_ptr+".")==0);   // starts with sec name?
@@ -102,7 +170,7 @@ namespace alps {
             }
             return !unused.empty();
         }
-        
+
         bool params::has_unused(std::ostream& out, const std::string& subsection) const
         {
             return has_unused_(out, &subsection);
@@ -113,7 +181,7 @@ namespace alps {
             return has_unused_(out, 0);
         }
 
-        std::ostream& params::print_help(std::ostream& out) const 
+        std::ostream& params::print_help(std::ostream& out) const
         {
             out << help_header_ << "\nAvailable options:\n";
 
@@ -124,7 +192,7 @@ namespace alps {
             std::string::size_type names_column_width=0;
 
             // prepare 2 columns: parameters and their description
-            BOOST_FOREACH(const td_map_type::value_type& tdp, td_map_) {
+            for(const td_map_type::value_type& tdp: td_map_) {
                 const std::string name_and_type=tdp.first + " (" +  tdp.second.typestr() + "):";
                 if (names_column_width<name_and_type.size()) names_column_width=name_and_type.size();
 
@@ -151,7 +219,7 @@ namespace alps {
             std::ostream::fmtflags oldfmt=out.flags();
             left(out);
             names_column_width += 4;
-            BOOST_FOREACH(const nd_pair& ndp, name_and_description) {
+            for(const nd_pair& ndp: name_and_description) {
                 out << std::left << std::setw(names_column_width) << ndp.first << ndp.second << "\n";
             }
             out.flags(oldfmt);
@@ -163,14 +231,14 @@ namespace alps {
         {
             return this->exists<bool>("help") && (*this)["help"].as<bool>();
         }
-        
+
         bool params::help_requested(std::ostream& out) const
         {
             if (!this->help_requested()) return false;
             print_help(out);
             return true;
         }
-        
+
         bool params::has_missing(std::ostream& out) const
         {
             if (this->ok()) return false;
@@ -184,17 +252,20 @@ namespace alps {
             typedef std::string::size_type size_type;
             const size_type& npos=std::string::npos;
             using std::string;
-            
+            using boost::optional;
+
             if (argc==0) return;
             origins_.data()[origins_type::ARGV0].assign(argv[0]);
             if (argc<2) return;
-            
+
             std::vector<string> all_args(argv+1,argv+argc);
             std::stringstream cmd_options;
+            std::vector<string> ini_files;
+            optional<string> restored_from_archive;
             bool file_args_mode=false;
-            BOOST_FOREACH(const string& arg, all_args) {
+            for(const string& arg: all_args) {
                 if (file_args_mode) {
-                    read_ini_file_(arg);
+                    ini_files.push_back(arg);
                     continue;
                 }
                 size_type key_end=arg.find('=');
@@ -210,16 +281,21 @@ namespace alps {
                 }
                 if (0==key_begin && npos==key_end) {
                     if (hdf5_path) {
-                        boost::optional<alps::hdf5::archive> maybe_ar=try_open_ar(arg, "r");
+                        optional<alps::hdf5::archive> maybe_ar=try_open_ar(arg, "r");
                         if (maybe_ar) {
-                            if (all_args.size()!=1) throw std::invalid_argument("HDF5 arhive must be the only argument");
+                            if (restored_from_archive) {
+                                throw archive_conflict("More than one archive is specified in command line",
+                                                       *restored_from_archive, arg);
+                            }
                             maybe_ar->set_context(hdf5_path);
                             this->load(*maybe_ar);
-                            origins_.data()[origins_type::ARCHNAME]=all_args[0];
-                            return;
+                            origins_.data()[origins_type::ARCHNAME]=arg;
+                            restored_from_archive=arg;
+                            continue;
                         }
                     }
-                    read_ini_file_(arg);
+
+                    ini_files.push_back(arg);
                     continue;
                 }
                 if (npos==key_end) {
@@ -228,25 +304,45 @@ namespace alps {
                     cmd_options << arg.substr(key_begin) << "\n";
                 }
             }
+            for (auto fname: ini_files) {
+                read_ini_file_(fname);
+            }
+
             // FIXME!!!
             // This is very inefficient and is done only for testing.
-            alps::testing::unique_file tmpfile(origins_.data()[origins_type::ARGV0]+".param.ini", alps::testing::unique_file::REMOVE_AFTER);
-            std::ofstream tmpstream(tmpfile.name().c_str());
+            std::string tmpfile_name=alps::temporary_filename("tmp_ini_file");
+            std::ofstream tmpstream(tmpfile_name.c_str());
             tmpstream << cmd_options.rdbuf();
             tmpstream.close();
-            read_ini_file_(tmpfile.name());
-            origins_.data().pop_back(); // remove the "invisible" ini file
+            ini_file_to_map(tmpfile_name, raw_kv_content_);
+
+            if (restored_from_archive) {
+                // The parameter object was restored from archive, and
+                // some key-values may have been supplied. We need to
+                // go through the already `define<T>()`-ed map values
+                // and try to parse the supplied string values as the
+                // corresponding types.
+
+                // It's a bit of a mess:
+                // 1) We rely on that we can iterate over dictionary as a map
+                // 2) Although it's const-iterator, we know that underlying map can be modified
+                for (auto& kv: *this) {
+                    const auto& key=kv.first;
+                    auto raw_kv_it=raw_kv_content_.find(key);
+                    if (raw_kv_it != raw_kv_content_.end()) {
+                        bool ok=apply_visitor(parse_visitor(raw_kv_it->second, const_cast<dictionary::value_type&>(kv.second)), kv.second);
+                        if (!ok) {
+                            const auto typestr=td_map_[key].typestr();
+                            throw exception::value_mismatch(key, "String '"+raw_kv_it->second+"' can't be parsed as type '"+typestr+"'");
+                        }
+                    }
+                }
+            }
         }
-        
+
         void params::read_ini_file_(const std::string& inifile)
         {
-            detail::iniparser parser(inifile);
-            BOOST_FOREACH(const detail::iniparser::kv_pair& kv, parser()) {
-                // FIXME!!! Check for duplicates and optionally warn!
-                std::string key=kv.first;
-                if (!key.empty() && key[0]=='.') key.erase(0,1);
-                raw_kv_content_[key]=kv.second;
-            }
+            ini_file_to_map(inifile, raw_kv_content_);
             origins_.data().push_back(inifile);
         }
 
@@ -278,7 +374,7 @@ namespace alps {
             std::vector<std::string> raw_keys, raw_vals;
             raw_keys.reserve(raw_kv_content_.size());
             raw_vals.reserve(raw_kv_content_.size());
-            BOOST_FOREACH(const strmap::value_type& kv, raw_kv_content_) {
+            for(const strmap::value_type& kv: raw_kv_content_) {
                 raw_keys.push_back(kv.first);
                 raw_vals.push_back(kv.second);
             }
@@ -287,18 +383,18 @@ namespace alps {
             ar[context+"@status"] << err_status_;
             ar[context+"@origins"]  << origins_.data();
             ar[context+"@help_header"]  << help_header_;
-            
+
             std::vector<std::string> keys=ar.list_children(context);
-            BOOST_FOREACH(const std::string& key, keys) {
+            for(const std::string& key: keys) {
                 td_map_type::const_iterator it=td_map_.find(key);
-                
+
                 if (it!=td_map_.end()) {
                     ar[key+"@description"] << it->second.descr();
                     ar[key+"@defnumber"] << it->second.defnumber();
                 }
             }
         }
-        
+
         void params::load(alps::hdf5::archive& ar) {
             params newpar;
             newpar.dictionary::load(ar);
@@ -309,7 +405,7 @@ namespace alps {
             ar[context+"@origins"]  >> newpar.origins_.data();
             newpar.origins_.check();
             ar[context+"@help_header"]  >> newpar.help_header_;
-            
+
             // Get the vectors of keys, values and convert them back to a map
             {
                 typedef std::vector<std::string> stringvec;
@@ -329,7 +425,7 @@ namespace alps {
                 }
             }
             std::vector<std::string> keys=ar.list_children(context);
-            BOOST_FOREACH(const std::string& key, keys) {
+            for(const std::string& key: keys) {
                 const std::string d_attr=key+"@description";
                 const std::string num_attr=key+"@defnumber";
                 if (ar.is_attribute(d_attr)) {
@@ -353,7 +449,7 @@ namespace alps {
                     newpar.td_map_.insert(std::make_pair(key, detail::td_type(typestr, descr, dn)));
                 }
             }
-            
+
             using std::swap;
             swap(*this, newpar);
         }
@@ -387,7 +483,7 @@ namespace alps {
             s << "[alps::params]"
               << " origins=" << p.origins_.data() << " status=" << p.err_status_
               << "\nRaw kv:\n";
-            BOOST_FOREACH(const params::strmap::value_type& kv, p.raw_kv_content_) {
+            for(const params::strmap::value_type& kv: p.raw_kv_content_) {
                 s << kv.first << "=" << kv.second << "\n";
             }
             s << "[alps::params] Dictionary:\n";
@@ -406,6 +502,14 @@ namespace alps {
             return s;
         }
 
+        std::string origin_name(const params& p)
+        {
+            std::string origin;
+            if (p.is_restored()) origin=p.get_archive_name();
+            else if (p.get_ini_name_count()>0) origin=p.get_ini_name(0);
+            else origin=alps::fs::get_basename(p.get_argv0());
+            return origin;
+        }
 
 #ifdef ALPS_HAVE_MPI
         void params::broadcast(const alps::mpi::communicator& comm, int rank) {
@@ -420,4 +524,3 @@ namespace alps {
 #endif
     } // ::params_ns
 }// alps::
-            
